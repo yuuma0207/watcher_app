@@ -86,14 +86,14 @@ uv sync
 
 ## 実行方法（開発時）
 ```bash
-uv run python main.py
+uv run main.py
 ```
 
 ---
 
 ## macOS でのスタートアップ機能UI確認
 ```bash
-STARTUP_DEBUG=1 uv run python main.py
+STARTUP_DEBUG=1 uv run main.py
 ```
 
 ---
@@ -107,14 +107,14 @@ uv add pyinstaller
 
 ### ビルド
 ```bash
-uv run pyinstaller --onefile --noconsole --name TantoCodeWatcher main.py
+uv run pyinstaller --onefile --noconsole --name FileWatcher main.py
 ```
 
 ### 出力
 ```
 dist/
-  TantoCodeWatcher.exe  (Windows)
-  TantoCodeWatcher      (macOS)
+  FileWatcher.exe  (Windows)
+  FileWatcher      (macOS)
 ```
 
 ---
