@@ -92,15 +92,15 @@ class MonitorWorker:
                     if is_office_temp_file(name):
                         continue
 
-                    # 保存中チェック（固定2秒）
-                    try:
-                        size1 = child.stat().st_size
-                        time.sleep(STABLE_WAIT_SECONDS)
-                        size2 = child.stat().st_size
-                        if size1 != size2:
-                            continue
-                    except Exception:
-                        continue
+                    # # 保存中チェック（固定2秒）
+                    # try:
+                    #     size1 = child.stat().st_size
+                    #     time.sleep(STABLE_WAIT_SECONDS)
+                    #     size2 = child.stat().st_size
+                    #     if size1 != size2:
+                    #         continue
+                    # except Exception:
+                    #     continue
 
                     code = extract_leading_3digit_code(name)
                     if code and (code in codes):
