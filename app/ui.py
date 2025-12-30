@@ -44,6 +44,9 @@ class App(tk.Tk):
         self._build_ui()
         self._refresh_all()
 
+        # 起動時に自動で監視開始
+        self.after(0, self._start_monitor)
+
         self.after(150, self._poll_queue)
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
@@ -509,6 +512,12 @@ class App(tk.Tk):
     def _start_monitor(self) -> None:
         if self.monitor_running:
             return
+        
+        # 監視対象がないなら開始しない
+        active_items = [it for it in self.cfg.items if (not it.is_deleted) and it.is_active]
+        if not active_items:
+            return
+        
         self.monitor_running = True
         self._set_overall_status(True)
         self.status_label.configure(text="監視中")
