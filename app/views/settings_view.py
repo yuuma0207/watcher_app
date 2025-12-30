@@ -18,6 +18,7 @@ class SettingsView(ttk.LabelFrame):
         interval_seconds: int,
         popup_persistent: bool,
         popup_seconds: int,
+        notify_folder_access_error: bool,
         on_save: Callable[[], None],
     ):
         super().__init__(master, text="監視の設定", padding=10)
@@ -26,6 +27,8 @@ class SettingsView(ttk.LabelFrame):
         self.var_interval_sec = tk.StringVar(value=str(interval_seconds % 60))
         self.var_popup_persistent = tk.BooleanVar(value=bool(popup_persistent))
         self.var_popup_sec = tk.StringVar(value=str(popup_seconds))
+        self.var_notify_access_error = tk.BooleanVar(value=notify_folder_access_error)
+
 
         row1 = ttk.Frame(self)
         row1.pack(fill="x")
@@ -51,7 +54,16 @@ class SettingsView(ttk.LabelFrame):
 
         row3 = ttk.Frame(self)
         row3.pack(fill="x", pady=(10, 0))
-        ttk.Button(row3, text="設定を保存", command=on_save).pack(side="left")
+        ttk.Checkbutton(
+            row3,
+            text="フォルダにアクセスできない場合も通知する",
+            variable=self.var_notify_access_error,
+        ).pack(side="left")
+
+        row4 = ttk.Frame(self)
+        row4.pack(fill="x", pady=(10, 0))
+        ttk.Button(row4, text="設定を保存", command=on_save).pack(side="left")
+
 
     def _toggle_popup_seconds_ui(self) -> None:
         if bool(self.var_popup_persistent.get()):

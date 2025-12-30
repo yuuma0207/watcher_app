@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from tkinter import ttk
 from typing import Callable, List, Tuple
+from typing import Dict
 
 
 class WatchListView(ttk.LabelFrame):
@@ -72,13 +73,29 @@ class WatchListView(ttk.LabelFrame):
             self.tree.delete(iid)
 
         for item_id, code, folder, is_active in rows:
+            status_mark = "●" if is_active else "❌"
             self.tree.insert(
                 "",
                 "end",
                 iid=item_id,
-                values=("●", code, folder),
+                values=(status_mark, code, folder),
                 tags=("active" if is_active else "paused",),
             )
+
+
+    def update_status(self, id_to_active: Dict[str, bool]) -> None:
+        for item_id, is_active in id_to_active.items():
+            if not self.tree.exists(item_id):
+                continue
+            status_mark = "●" if is_active else "❌"
+            values = self.tree.item(item_id, "values")
+            # values は (status, code, folder)
+            self.tree.item(
+                item_id,
+                values=(status_mark, values[1], values[2]),
+                tags=("active" if is_active else "paused",),
+            )
+
 
     def selected_ids(self) -> List[str]:
         return list(self.tree.selection())

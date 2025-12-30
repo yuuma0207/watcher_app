@@ -1,7 +1,7 @@
 import threading
 import time
 from pathlib import Path
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional, Set, Tuple
 
 from .config import AppConfig
 from .constants import STABLE_WAIT_SECONDS
@@ -36,14 +36,14 @@ class MonitorWorker:
 
     def run_once(self, show_nohit: bool = True) -> None:
         cfg: AppConfig = self._get_config()
-        hits = self._scan_once(cfg)
-        self._q.put({"type": "scan_result", "hits": hits, "show_nohit": show_nohit})
+        hits, errors = self._scan_once(cfg)
+        self._q.put({"type": "scan_result", "hits": hits, "errors": errors, "show_nohit": show_nohit})
 
     def _run(self) -> None:
         # 監視開始直後の1回（VBA互換）
         cfg: AppConfig = self._get_config()
-        hits = self._scan_once(cfg)
-        self._q.put({"type": "scan_result", "hits": hits, "show_nohit": True})
+        hits, errors = self._scan_once(cfg)
+        self._q.put({"type": "scan_result", "hits": hits, "errors": errors, "show_nohit": True})
 
         while not self._stop.is_set():
             cfg = self._get_config()
@@ -58,12 +58,12 @@ class MonitorWorker:
             cfg = self._get_config()
             hits = self._scan_once(cfg)
             # 通常サイクル 0件は無通知（VBA互換）
-            self._q.put({"type": "scan_result", "hits": hits, "show_nohit": False})
+            self._q.put({"type": "scan_result", "hits": hits, "errors": errors, "show_nohit": False})
 
-    def _scan_once(self, cfg: AppConfig) -> Dict[str, List[str]]:
+    def _scan_once(self, cfg: AppConfig) -> Tuple[Dict[str, List[str]], Dict[str, str]]:
         active_items = [x for x in cfg.items if (not x.is_deleted) and x.is_active]
         if not active_items:
-            return {}
+            return {}, {}
 
         folder_to_codes: Dict[str, Set[str]] = {}
         folder_original: Dict[str, str] = {}
@@ -77,14 +77,22 @@ class MonitorWorker:
             folder_original[key] = f
 
         hits: Dict[str, List[str]] = {}
+        errors: Dict[str, str] = {}
 
         for fkey, codes in folder_to_codes.items():
             folder = folder_original.get(fkey, fkey)
             p = Path(folder)
-            if not p.exists() or not p.is_dir():
-                continue
 
+            # フォルダにアクセスできるか
             try:
+                if not p.exists():
+                    errors[folder] = "フォルダが存在しません。"
+                    continue
+                if not p.is_dir():
+                    errors[folder] = "フォルダではありません。"
+                    continue
+
+                # iterdir自体が PermissionError を出す場合もある
                 for child in p.iterdir():
                     if child.is_dir():
                         continue
@@ -92,23 +100,16 @@ class MonitorWorker:
                     if is_office_temp_file(name):
                         continue
 
-                    # # 保存中チェック（固定2秒）
-                    # try:
-                    #     size1 = child.stat().st_size
-                    #     time.sleep(STABLE_WAIT_SECONDS)
-                    #     size2 = child.stat().st_size
-                    #     if size1 != size2:
-                    #         continue
-                    # except Exception:
-                    #     continue
-
                     code = extract_leading_3digit_code(name)
                     if code and (code in codes):
                         hits.setdefault(folder, []).append(name)
-            except Exception:
+            except PermissionError:
+                errors[folder] = "アクセス権限がありません"
                 continue
-
+            except OSError as e:
+                errors[folder] = f"フォルダにアクセスできません: {e.__class__.__name__}"
+                continue
+            
         for k in list(hits.keys()):
             hits[k] = sorted(set(hits[k]))
-
-        return hits
+        return hits, errors
