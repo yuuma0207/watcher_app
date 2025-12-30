@@ -53,6 +53,20 @@ class App(tk.Tk):
     def _get_config_snapshot(self) -> AppConfig:
         return self.cfg
     
+    # 親フォルダを返す共通関数
+    def _parent_dir_or_none(self, path_str: str | None) -> str | None:
+        if not path_str:
+            return None
+        try:
+            p = Path(path_str).expanduser().resolve()
+            parent = p.parent
+            if parent == p:  # ルート対策（C:\ や /）
+                return str(p)
+            return str(parent)
+        except Exception:
+            return None
+
+    
     # スタートアップ用のメソッド
     def _refresh_startup_button_text(self) -> None:
         if not getattr(self, "btn_startup", None):
@@ -236,10 +250,14 @@ class App(tk.Tk):
             except Exception:
                 messagebox.showerror("入力エラー", "ポップアップ表示秒数(秒)が不正です")
                 return
+            
+        notify_folder_access_error = bool(self.settings_view.var_notify_access_error.get())
 
         self.cfg.settings.interval_seconds = interval
         self.cfg.settings.popup_persistent = popup_persistent
         self.cfg.settings.popup_seconds = int(popup_seconds)
+        self.cfg.settings.notify_folder_access_error = notify_folder_access_error
+
 
         try:
             save_config(self.cfg)
@@ -258,25 +276,31 @@ class App(tk.Tk):
             pass
 
     def _browse_folder_new(self) -> None:
-        initial = self.cfg.settings.last_browse_dir if is_valid_dir(self.cfg.settings.last_browse_dir) else None
+        base = self.cfg.settings.last_browse_dir if is_valid_dir(self.cfg.settings.last_browse_dir) else None
+        initial = self._parent_dir_or_none(base)
+
         d = filedialog.askdirectory(title="監視フォルダを選択（新規作成）", initialdir=initial or None)
         if d:
             self.new_view.set_folder(d)
             self._remember_browse_dir(d)
+
 
     def _browse_folder_edit(self) -> None:
         initial = None
         if self.editing_id:
             it = self._find_item(self.editing_id)
             if it and is_valid_dir(it.folder):
-                initial = it.folder
+                initial = self._parent_dir_or_none(it.folder)
+
         if not initial:
-            initial = self.cfg.settings.last_browse_dir if is_valid_dir(self.cfg.settings.last_browse_dir) else None
+            base = self.cfg.settings.last_browse_dir if is_valid_dir(self.cfg.settings.last_browse_dir) else None
+            initial = self._parent_dir_or_none(base)
 
         d = filedialog.askdirectory(title="監視フォルダを選択（編集）", initialdir=initial or None)
         if d:
             self.edit_view.set_folder(d)
             self._remember_browse_dir(d)
+
 
     # ----------------------------
     # Validation for views
@@ -424,18 +448,26 @@ class App(tk.Tk):
         ids = self.watch_list.selected_ids()
         if not ids:
             return
-        changed = False
+
+        changed_rows = {}
         for it in self.cfg.items:
             if it.id in ids and (not it.is_deleted):
                 it.is_active = not it.is_active
                 it.touch()
-                changed = True
-        if changed:
-            try:
-                save_config(self.cfg)
-            except Exception as e:
-                messagebox.showerror("保存失敗", f"設定ファイルの保存に失敗しました。\n{e}")
-            self._refresh_all()
+                changed_rows[it.id] = it.is_active  # ★ 更新対象だけ覚える
+
+        if not changed_rows:
+            return
+
+        try:
+            save_config(self.cfg)
+        except Exception as e:
+            messagebox.showerror("保存失敗", f"設定ファイルの保存に失敗しました。\n{e}")
+            return
+
+        # ★全更新しないで、行だけ更新
+        self.watch_list.update_status(changed_rows)
+
 
     def _soft_delete_selected(self) -> None:
         ids = self.watch_list.selected_ids()
@@ -552,9 +584,11 @@ class App(tk.Tk):
             return
 
         hits: Dict[str, List[str]] = msg.get("hits") or {}
+        errors: Dict[str, str] = msg.get("errors") or {}
         show_nohit: bool = bool(msg.get("show_nohit", False))
 
         if hits:
+            # hitsがある場合は従来通り（必要なら errors も一緒に表示してもOK）
             self.popup.show_or_update(
                 hits,
                 popup_persistent=self.cfg.settings.popup_persistent,
@@ -562,12 +596,33 @@ class App(tk.Tk):
             )
             return
 
-        if show_nohit:
+        # hits がない時
+        if not show_nohit:
+            # フォルダへのアクセスエラーのみ表示
+            if errors and self.cfg.settings.notify_folder_access_error:
+                lines = [f"{folder}：{reason}" for folder, reason in errors.items()]
+                self.popup.show_or_update(
+                    {"(アクセスできないフォルダ)": lines},
+                    popup_persistent=self.cfg.settings.popup_persistent,
+                    popup_seconds=self.cfg.settings.popup_seconds,
+                )
+            return
+
+        # show_nohit=True（起動直後/今すぐ1回）
+        if errors and self.cfg.settings.notify_folder_access_error:
+            lines = [f"{folder}：{reason}" for folder, reason in errors.items()]
             self.popup.show_or_update(
-                {"(監視結果)": ["該当ファイルは見つかりませんでした。"]},
+                {"(監視結果)": ["該当ファイルはありませんでした。"], "(アクセスできないフォルダ)": lines},
                 popup_persistent=self.cfg.settings.popup_persistent,
                 popup_seconds=self.cfg.settings.popup_seconds,
             )
+        else:
+            self.popup.show_or_update(
+                {"(監視結果)": ["該当ファイルはありませんでした。"]},
+                popup_persistent=self.cfg.settings.popup_persistent,
+                popup_seconds=self.cfg.settings.popup_seconds,
+            )
+
 
     # ----------------------------
     # Close

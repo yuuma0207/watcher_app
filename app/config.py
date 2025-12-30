@@ -43,7 +43,7 @@ class AppSettings:
     popup_persistent: bool = True
     popup_seconds: int = 60
     last_browse_dir: str = ""
-
+    notify_folder_access_error: bool = True
 
 @dataclass
 class AppConfig:
