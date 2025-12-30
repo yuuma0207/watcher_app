@@ -56,7 +56,7 @@ class MonitorWorker:
                 time.sleep(0.2)
 
             cfg = self._get_config()
-            hits = self._scan_once(cfg)
+            hits, errors = self._scan_once(cfg)
             # 通常サイクル 0件は無通知（VBA互換）
             self._q.put({"type": "scan_result", "hits": hits, "errors": errors, "show_nohit": False})
 
