@@ -169,6 +169,7 @@ class App(tk.Tk):
             interval_seconds=self.cfg.settings.interval_seconds,
             popup_persistent=self.cfg.settings.popup_persistent,
             popup_seconds=self.cfg.settings.popup_seconds,
+            notify_folder_access_error=self.cfg.settings.notify_folder_access_error,
             on_save=self._save_settings,
         )
         self.settings_view.pack(fill="x")
